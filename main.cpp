@@ -1,16 +1,23 @@
 #include "solver.h"
+#include <iostream>
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    if (argc != 2) {
+        std::wcout << "Usage: ./a.exe filename\n";
+        return 1;
+    }
 
     std::string puzzleDir = "./puzzles";
     std::string solutionDir = "./solutions";
-    std::string puzzleName = "1.txt";
+    std::string puzzleName = argv[1];
 
     Solver s;
-    s.generateGridFromFile(puzzleDir, puzzleName);
-    s.printGrid();
-    //s.solve();
-    s.printGrid();
+    if (s.generateGridFromFile(puzzleDir, puzzleName)) {
+        s.printGrid();
+        (void)s.solve();
+        s.printGrid();
+    }
 
     return 0;
 
