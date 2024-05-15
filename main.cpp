@@ -15,8 +15,9 @@ int main(int argc, char *argv[]) {
     Solver s;
     if (s.generateGridFromFile(puzzleDir, puzzleName)) {
         s.printGrid();
-        (void)s.solve();
+        int numStepsToSolve = s.solve();
         s.printGrid();
+        std::wcout << "Solved in " << numStepsToSolve << " steps.\n";
     }
 
     return 0;

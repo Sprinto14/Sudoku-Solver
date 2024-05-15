@@ -5,7 +5,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <io.h>
-#include <vector>
+#include <unordered_map>
 
 
 Solver::Solver() {
@@ -98,13 +98,13 @@ void Solver::printGrid() {
 }
 
 
-bool Solver::solve() {
+int Solver::solve() {
     /// Solve the grid initialised in the grid variable
     /// Returns true if a solution is possible, and the grid variable will hold the solved state
     
     // When setting up the grid, we already collapsed the cells and setup their options appropriately, so we just need to iterate on this process
 
-
+    int numIterations = 0;
     while (numCellsRemaining > 0) {
 
         // Create a list of cells with the fewest remaining options
@@ -132,7 +132,7 @@ bool Solver::solve() {
 
             if (this->revertState()) {
                 std::wcout << "No solution found.\n";
-                return false;
+                return -1;
             }
 
             continue;
@@ -150,11 +150,12 @@ bool Solver::solve() {
 
         // Collapse the selected cell to one of its options at random
         this->collapseCell(chosenCellCoord);
+
+        numIterations++;
     }
 
-
     // If we solve, return true
-    return true;
+    return numIterations;
 
 }
 
@@ -184,18 +185,136 @@ void Solver::reduceOptions(std::pair<int, int> coord, int val) {
 
     auto [curX, curY] = coord;
 
+
+    /// Reduce options due to direct placement of the new value
+
+    // If we reduce the options of a cell, we add its row, col, and box to the corresponding set for later advanced reduction
+    std::unordered_set<int> rowsToReduce, colsToReduce, boxesToReduce;
+    std::vector<std::pair<int, int>> reducedCellCoords;
+    std::unordered_set<int> reducedCellIndices;
+
+    auto insertCellToSet = [&rowsToReduce, &colsToReduce, &boxesToReduce] (int &x, int &y) -> void {
+        rowsToReduce.insert(y);
+        colsToReduce.insert(x);
+        boxesToReduce.insert((x / BOXWIDTH) + (y / BOXHEIGHT) * NUMBOXESPERROW);
+    };
+
+
     // Reduce options for row and column
     for (int i = 0; i < GRIDSIZE; i++) {
-        this->grid[i][curX].removeOption(val);
-        this->grid[curY][i].removeOption(val);
+        if (this->grid[i][curX].removeOption(val)) insertCellToSet(curX, i);
+        if (this->grid[curY][i].removeOption(val)) insertCellToSet(i, curY);
     }
 
     // Reduce options for box
     int boxMinX = (curX / BOXWIDTH) * BOXWIDTH, boxMinY = (curY / BOXHEIGHT) * BOXHEIGHT;
     int boxMaxX = boxMinX + BOXWIDTH, boxMaxY = boxMinY + BOXHEIGHT;
     for (int y = boxMinY; y < boxMaxY; y++) {
+        if (y == curY) continue;
         for (int x = boxMinX; x < boxMaxX; x++) {
-            this->grid[y][x].removeOption(val);
+            if (x == curX) continue;
+            if (this->grid[y][x].removeOption(val)) insertCellToSet(x, y);
+        }
+    }
+
+
+    // For each row, col, & box, generate a list of coordinates to pass to the advanced reduce function, then run the advanced reduction on the set of coordinates
+    for (const int &row : rowsToReduce) {
+        std::vector<std::pair<int, int>> coords;
+        for (int i = 0; i < GRIDSIZE; i++) coords.push_back({i, row});
+        this->advancedReduceOptions(coords);
+    }
+
+    for (const int &col : colsToReduce) {
+        std::vector<std::pair<int, int>> coords;
+        for (int i = 0; i < GRIDSIZE; i++) coords.push_back({col, i});
+        this->advancedReduceOptions(coords);
+    }
+
+    for (const int &box : boxesToReduce) {
+
+        int minX = (box % NUMBOXESPERROW) * BOXWIDTH;
+        int minY = (box / NUMBOXESPERROW) * BOXHEIGHT;
+
+        int maxX = minX + BOXWIDTH;
+        int maxY = minY + BOXWIDTH;
+
+        std::vector<std::pair<int, int>> coords;
+        for (int y = minY; y < maxY; y++)
+            for (int x = minX; x < maxX; x++) 
+                coords.push_back({x, y});
+
+        this->advancedReduceOptions(coords);
+    }
+
+}
+
+
+void Solver::advancedReduceOptions(std::vector<std::pair<int, int>> &coords) {
+    /// Reduce options indirectly, due to correlations between cells and blocked values from other cells
+    /// Takes as input a vector of coordinates which must contain exactly one instance of each number in the grid (i.e. it has size GRIDSIZE)
+    /// This generalises for a row, column, or box of cells, where the values of cells in this grouping can be correlated due to the uniqueness rule
+    
+    // For each possible value, generate a list of indices 'i' where that value is an option in the cell at coords[i]
+    // This list is stored as a bitmap, where the 'i'th bit being set corresponds to the value being an option in the cell at coords[i]
+    // Hence, size of these lists are separately stored in numIndicesOfVal (so we don't have to count it later)
+    std::bitset<GRIDSIZE> indicesOfVal[GRIDSIZE];
+    int numIndicesOfVal[GRIDSIZE];
+    memset(numIndicesOfVal, 0, sizeof(numIndicesOfVal));
+
+    for (int i = 0; i < GRIDSIZE; i++) {
+        auto &[x, y] = coords[i];
+
+        for (const int &val : grid[y][x].getOptions()) {
+            indicesOfVal[val - 1].set(i);
+            numIndicesOfVal[val - 1]++;
+        }
+    }
+
+
+    // Generate an inverse mapping from each set of indices to the values shared between them
+    // As this is generated from the previous map, it has a maximum size of GRIDSIZE, and hence is not too memory-intensive
+    // This results in each unique set of indices mapping to all of the values that are found only at the cells indicated by those indices (and none others)
+    // This will mean that we can quickly find correlated groupings that result in eliminations
+    // e.g. if a pair of values are only found in two cells in the row, this will result in an entry in the map of [index1, index2] : [val1, val2]
+    // As the key and value have the same length, we know that the values must lie only in this set of indices, and all other options in these cells can be removed
+    // This generalises the size = 1 case, as if there is a single instance of a value option in a row/col, this will result in a mapping of [index] : [value]
+
+    std::unordered_map<std::bitset<GRIDSIZE>, int> indexGroupSize;
+    std::unordered_map<std::bitset<GRIDSIZE>, std::pair<int, std::bitset<GRIDSIZE>>> indexGroupToValMap;
+    for (int j = 0; j < GRIDSIZE; j++) {
+
+        auto &curIndexSet = indicesOfVal[j];
+        int curIndexSetSize = numIndicesOfVal[j];
+
+        // Count how many values correspond to the current index set
+        if (indexGroupToValMap.count(curIndexSet) == 0) {
+            indexGroupToValMap[curIndexSet].first = 1;
+
+            // Store the current index set size into a hashmap we can refer back to later
+            indexGroupSize[curIndexSet] = curIndexSetSize;
+        } else {
+            indexGroupToValMap[curIndexSet].first++;
+        }
+        
+        // Create the inverse mapping of the original set
+        indexGroupToValMap[curIndexSet].second.set(j);
+    }
+
+
+    // Look for key-value pairs in this new map of equal length, and remove extraneous options if so
+    for (const auto &[indices, valuesInfo] : indexGroupToValMap) {
+
+        auto &[numValues, values] = valuesInfo;
+
+        // If the sizes of the index set and values set matches, we can eliminate all other options for these cells
+        if (indexGroupSize[indices] == numValues) {
+            for (int j = 0; j < GRIDSIZE; j++) {
+                if (indices[j]) {
+                    auto &[x, y] = coords[j];
+                    grid[y][x].setOptions(values);
+                }
+            }
         }
     }
 }

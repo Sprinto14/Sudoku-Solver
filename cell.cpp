@@ -32,7 +32,22 @@ int Cell::numOptions() {
 }
 
 
+std::unordered_set<int> Cell::getOptions() {
+    return this->options;
+}
+
+
+std::bitset<GRIDSIZE> Cell::getOptionsAsBitset() {
+    std::bitset<GRIDSIZE> output;
+    for (const int &val : this->options) {
+        output.set(val - 1);
+    }
+    return output;
+}
+
+
 void Cell::setOptions(std::bitset<GRIDSIZE> optionsSet) {
+    this->options.clear();
     for (int i = 0; i < GRIDSIZE; i++) {
         if (optionsSet[i]) {
             this->options.insert(i + 1);
@@ -41,8 +56,16 @@ void Cell::setOptions(std::bitset<GRIDSIZE> optionsSet) {
 }
 
 
-void Cell::removeOption(int val) {
-    this->options.erase(val);
+void Cell::setOptions(int val) {
+    this->options.clear();
+    this->options.insert(val);
+}
+
+
+int Cell::removeOption(int val) {
+    /// Removes the specified value from the option set.
+    /// Returns 1 if the value was removed, 0 otherwise.
+    return this->options.erase(val);
 }
 
 

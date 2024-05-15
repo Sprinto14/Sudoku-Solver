@@ -6,11 +6,14 @@
 #include <bitset>
 #include <stack>
 #include <array>
+#include <vector>
 #include <utility>
 
 #define GRIDSIZE 9
 #define BOXWIDTH 3
 #define BOXHEIGHT 3
+#define NUMBOXESPERROW (GRIDSIZE / BOXWIDTH)
+#define NUMBOXESPERCOL (GRIDSIZE / BOXHEIGHT)
 #define TOTALNUMCELLS (GRIDSIZE * GRIDSIZE)
 
 
@@ -24,8 +27,12 @@ public:
     int getVal();
     int numOptions();
 
+    std::unordered_set<int> getOptions();
+    std::bitset<GRIDSIZE> getOptionsAsBitset();
+
     void setOptions(std::bitset<GRIDSIZE>);
-    void removeOption(int);
+    void setOptions(int);
+    int removeOption(int);
 
     int collapse();
     void collapse(int);
@@ -45,7 +52,7 @@ public:
     //~Solver();
     bool generateGridFromFile(std::string, std::string);
     void printGrid();
-    bool solve();
+    int solve();
 
 private:
     Cell grid[GRIDSIZE][GRIDSIZE];
@@ -58,6 +65,7 @@ private:
     void collapseCell(int, int, int);
 
     void reduceOptions(std::pair<int, int>, int val);
+    void advancedReduceOptions(std::vector<std::pair<int, int>> &);
 
     void saveState(std::pair<int, int> coord);
     bool revertState();
