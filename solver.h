@@ -30,7 +30,7 @@ public:
     std::unordered_set<int> getOptions();
     std::bitset<GRIDSIZE> getOptionsAsBitset();
 
-    void setOptions(std::bitset<GRIDSIZE>);
+    void setOptions(const std::bitset<GRIDSIZE>&);
     void setOptions(int);
     int removeOption(int);
 
@@ -48,11 +48,11 @@ public:
 
 class Solver {
 public:
-    Solver();//std::string, std::string);
-    //~Solver();
+    Solver(std::string = "", std::string = "");
     bool generateGridFromFile(std::string, std::string);
     void printGrid();
-    int solve();
+    void printGridWithOptions();
+    int solve(bool = false);
 
 private:
     Cell grid[GRIDSIZE][GRIDSIZE];

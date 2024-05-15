@@ -3,8 +3,10 @@
 
 int main(int argc, char *argv[]) {
 
-    if (argc != 2) {
-        std::wcout << "Usage: ./a.exe filename\n";
+    std::string debugFlag = "-g";
+
+    if (argc != 2 && argc != 3) {
+        std::cout << "Usage: ./a.exe filename [" << debugFlag << " for debugModeEnabled]\n";
         return 1;
     }
 
@@ -12,12 +14,14 @@ int main(int argc, char *argv[]) {
     std::string solutionDir = "./solutions";
     std::string puzzleName = argv[1];
 
+    bool debugModeEnabled = ((argc == 3) && (debugFlag.compare(argv[2]) == 0));
+
     Solver s;
     if (s.generateGridFromFile(puzzleDir, puzzleName)) {
         s.printGrid();
-        int numStepsToSolve = s.solve();
+        int numStepsToSolve = s.solve(debugModeEnabled);
         s.printGrid();
-        std::wcout << "Solved in " << numStepsToSolve << " steps.\n";
+        std::cout << "Solved in " << numStepsToSolve << " steps.\n";
     }
 
     return 0;

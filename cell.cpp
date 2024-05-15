@@ -46,7 +46,7 @@ std::bitset<GRIDSIZE> Cell::getOptionsAsBitset() {
 }
 
 
-void Cell::setOptions(std::bitset<GRIDSIZE> optionsSet) {
+void Cell::setOptions(const std::bitset<GRIDSIZE> &optionsSet) {
     this->options.clear();
     for (int i = 0; i < GRIDSIZE; i++) {
         if (optionsSet[i]) {

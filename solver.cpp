@@ -8,8 +8,10 @@
 #include <unordered_map>
 
 
-Solver::Solver() {
-    //memset(this->grid, 0, sizeof(this->grid));
+Solver::Solver(std::string puzzleDir, std::string puzzleName) {
+    if (!puzzleDir.empty() && !puzzleName.empty()) {
+        this->generateGridFromFile(puzzleDir, puzzleName);
+    }
 }
 
 
@@ -95,10 +97,94 @@ void Solver::printGrid() {
     std::wcout << L"───┘";
 
     std::wcout << "\n";
+
+    _setmode(_fileno(stdout), _O_TEXT);
 }
 
 
-int Solver::solve() {
+void Solver::printGridWithOptions() {
+    _setmode(_fileno(stdout), _O_U16TEXT);
+
+    const int BOXDRAWWIDTH = BOXWIDTH * 2 + 1;
+    const int HALFBOXDRAWWIDTH = BOXDRAWWIDTH / 2;
+
+    // Box construction strings
+    std::wstring borderLineSeg (BOXDRAWWIDTH, L'─');
+    std::wstring middleLineSeg (BOXDRAWWIDTH, L'-');
+    std::wstring middleFullSpace (BOXDRAWWIDTH, L' ');
+    std::wstring middleHalfSpace (HALFBOXDRAWWIDTH, L' ');
+    std::wstring optionMarker = L"▪ ";
+    std::wstring optionMarkerSpace (optionMarker.size(), L' ');
+    std::wstring optionOffsetSpace (BOXDRAWWIDTH - (BOXWIDTH * optionMarker.size()), L' ');
+    const int HALFBOXHEIGHT = BOXHEIGHT / 2;
+
+    // Top line
+    wprintf(L"┌");
+    for (int i = 1; i < GRIDSIZE; i++) std::wcout << borderLineSeg << L"┬";
+    std::wcout << borderLineSeg << L"┐\n";
+
+    // Grid body
+    for (int i = 0; i < GRIDSIZE; i++) {
+
+        std::wstring rowString[BOXHEIGHT];
+        
+        for (int j = 0; j < GRIDSIZE; j++) {
+            
+            // Create collapsed cell (empty spaces with number in middle)
+            if (this->grid[i][j].isCollapsed()) {
+                for (int k = 0; k < BOXHEIGHT; k++) {
+                    rowString[k] += ((j % BOXWIDTH == 0) ? L"│" : L"¦");
+
+                    if (k == HALFBOXHEIGHT) {
+                        rowString[k] += middleHalfSpace;
+                        rowString[k] += (this->grid[i][j].isCollapsed() ? char('0' + this->grid[i][j].getVal()) : L' ');
+                        rowString[k] += middleHalfSpace;
+                    } else {
+                        rowString[k] += middleFullSpace;
+                    }
+                }
+            } else { // Create uncollapsed cell, showing all options
+                std::bitset<GRIDSIZE> curOptions = grid[i][j].getOptionsAsBitset();
+                for (int k = 0; k < BOXHEIGHT; k++) {
+                    rowString[k] += ((j % BOXWIDTH == 0) ? L"│" : L"¦") + optionOffsetSpace;
+
+                    for (int m = k * BOXWIDTH; m < (k + 1) * BOXWIDTH; m++) {
+                        rowString[k] += (curOptions[m] ? optionMarker : optionMarkerSpace);
+                    }
+                }
+            }
+        }
+
+        // Print this row of cells
+        for (int k = 0; k < BOXHEIGHT; k++) {
+            std::wcout << rowString[k] << L"│\n";
+        }
+
+        // Inbetween line
+        if (i == GRIDSIZE - 1) {
+            break;
+        } else if ((i + 1) % BOXHEIGHT == 0) {
+            std::wcout << L"├";
+            for (int j = 1; j < GRIDSIZE; j++) std::wcout << borderLineSeg << L"┼";
+            std::wcout << borderLineSeg << L"┤\n";
+        } else {
+            std::wcout << L"├";
+            for (int j = 1; j < GRIDSIZE; j++) std::wcout << middleLineSeg << L"┼";
+            std::wcout << middleLineSeg << L"┤\n";
+        }
+    }
+
+    // Bottom line
+    std::wcout << L"└";
+    for (int i = 1; i < GRIDSIZE; i++) std::wcout << borderLineSeg << L"┴";
+    std::wcout << borderLineSeg << L"┘\n";
+
+    _setmode(_fileno(stdout), _O_TEXT);
+
+}
+
+
+int Solver::solve(bool debugModeEnabled) {
     /// Solve the grid initialised in the grid variable
     /// Returns true if a solution is possible, and the grid variable will hold the solved state
     
@@ -130,6 +216,8 @@ int Solver::solve() {
         // If there are no options for a given cell, then we have reached a contradiction and should revert back to the previous state
         if (fewestOptions == 0) {
 
+            if (debugModeEnabled) std::wcout << "Backtracking...\n";
+
             if (this->revertState()) {
                 std::wcout << "No solution found.\n";
                 return -1;
@@ -138,9 +226,7 @@ int Solver::solve() {
             continue;
         }
 
-        // Save the current state, then collapse a cell to a random choice of one of its options
-
-        // Now select a random cell to collapse
+        // Select a random cell to collapse
         std::pair<int, int> &chosenCellCoord = cellChoices[std::rand() % cellChoices.size()];
 
         // If we need to make a guess (there is more than one option for the fewest cell), then save the current state for backtracking purposes
@@ -152,6 +238,12 @@ int Solver::solve() {
         this->collapseCell(chosenCellCoord);
 
         numIterations++;
+
+        if (debugModeEnabled) {
+            std::wcout << "Collapsing (" << chosenCellCoord.first << ", " << chosenCellCoord.second << ") - " << (fewestOptions == 1 ? "Certain" : "Guess") << "\n";
+            printGridWithOptions();
+            (void) std::cin.get();
+        }
     }
 
     // If we solve, return true
